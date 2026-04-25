@@ -44,6 +44,9 @@ class RUDPSocket:
         self.closed = False
         self.pending_received_packets = deque()
 
+    def _buffer_received_packet(self, packet: Packet, already_acked: bool) -> None:
+        self.pending_received_packets.append((packet, already_acked))
+
     def bind(self, address: Tuple[str, int]) -> None:
         self.sock.bind(address)
 
@@ -166,7 +169,10 @@ class RUDPSocket:
                     print("Received DATA during handshake. Handshake complete implicitly.")
                     self._next_seq()
                     self.expected_seq = 1 - client_seq
-                    self.pending_received_packets.append(packet)  # Buffer it!
+                    if packet.seq_num == self.expected_seq:
+                        ack = Packet(ack_num=packet.seq_num, flags=Packet.ACK)
+                        self._send_packet(ack)
+                        self._buffer_received_packet(packet, already_acked=True)
                     print(f"Connection established implicitly with {addr}")
                     return self, addr
 
@@ -202,9 +208,8 @@ class RUDPSocket:
                         print(f"Received DATA while waiting for ACK. ACKing seq={incoming_packet.seq_num} and buffering.")
                         ack = Packet(ack_num=incoming_packet.seq_num, flags=Packet.ACK)
                         self._send_packet(ack)
-                        self.pending_received_packets.append(incoming_packet)
-                        self._next_expected_seq()
-                        return
+                        self._buffer_received_packet(incoming_packet, already_acked=True)
+                        continue
                     else:
                         print(f"Received duplicate DATA seq={incoming_packet.seq_num}. Resending ACK.")
                         duplicate_ack = Packet(ack_num=incoming_packet.seq_num, flags=Packet.ACK)
@@ -265,8 +270,12 @@ class RUDPSocket:
         while True:
             # 1. Check the buffer first!
             if self.pending_received_packets:
-                packet = self.pending_received_packets.popleft()
-                already_acked = True
+                buffered = self.pending_received_packets.popleft()
+                if isinstance(buffered, tuple):
+                    packet, already_acked = buffered
+                else:
+                    packet = buffered
+                    already_acked = True
                 print(f"Processing buffered packet seq={packet.seq_num}")
             else:
                 try:
@@ -317,13 +326,14 @@ class RUDPSocket:
             return
 
         fin = Packet(seq_num=self.seq_num, flags=Packet.FIN)
+        close_timeout = min(self.timeout, 0.2)
 
         for _ in range(self.MAX_RETRIES):
             self._send_packet(fin)
             print(f"Sent FIN seq={fin.seq_num}")
 
             try:
-                incoming_packet, _ = self._receive_valid_packet()
+                incoming_packet, _ = self._receive_valid_packet(timeout=close_timeout)
 
                 # Normal teardown
                 if incoming_packet.has_flag(Packet.ACK) and incoming_packet.ack_num == fin.seq_num:
@@ -336,6 +346,11 @@ class RUDPSocket:
                     fin_ack = Packet(ack_num=incoming_packet.seq_num, flags=Packet.ACK)
                     self._send_packet(fin_ack)
                     break # Exit the loop immediately, no more waiting
+
+                elif incoming_packet.has_flag(Packet.DATA):
+                    print(f"Received DATA during close. ACKing seq={incoming_packet.seq_num}")
+                    data_ack = Packet(ack_num=incoming_packet.seq_num, flags=Packet.ACK)
+                    self._send_packet(data_ack)
 
             except socket.timeout:
                 print("Timeout waiting for FIN ACK, retransmitting FIN")
