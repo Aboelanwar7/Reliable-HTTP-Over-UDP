@@ -131,11 +131,8 @@ class RUDPSocket:
 
         raise TimeoutError("Failed to establish connection")
 
-    def accept(self) -> Tuple["RUDPSocket", Tuple[str, int]]:
-        """
-        Server-side handshake.
-        Returns self and the connected client address.
-        """
+    def accept(self) -> Tuple["RUDPSocket", Tuple[str, int]]: # Server-side handshake.
+
         print("Waiting for connection")
         old_timeout = self.sock.gettimeout()
         self.sock.settimeout(None)
@@ -157,14 +154,14 @@ class RUDPSocket:
             try:
                 packet, addr = self._receive_valid_packet()
 
-                # Case 1: Normal ACK received
+                # case 1: Normal ACK received
                 if packet.has_flag(Packet.ACK) and not packet.has_flag(Packet.DATA) and packet.ack_num == self.seq_num:
                     self._next_seq()
                     self.expected_seq = 1 - client_seq
                     print(f"Connection established with {addr}")
                     return self, addr
 
-                # Case 2: IMPLICIT ACK via DATA
+                # case 2: IMPLICIT ACK via DATA
                 if packet.has_flag(Packet.DATA):
                     print("Received DATA during handshake. Handshake complete implicitly.")
                     self._next_seq()
@@ -176,7 +173,7 @@ class RUDPSocket:
                     print(f"Connection established implicitly with {addr}")
                     return self, addr
 
-                # Case 3: Client re-sent SYN
+                # case 3: Client re-sent SYN
                 if packet.has_flag(Packet.SYN):
                     self._send_packet(syn_ack)
 
@@ -185,11 +182,8 @@ class RUDPSocket:
 
         raise TimeoutError("Handshake failed while waiting for final ACK")
 
-    def _send_one_reliable_packet(self, packet: Packet) -> None:
-        """
-        Send one packet using stop-and-wait until its ACK is received.
-        Also handles the case where the peer sends DATA while we are waiting for ACK.
-        """
+    def _send_one_reliable_packet(self, packet: Packet) -> None:  #Send one packet using stop-and-wait until its ACK is received.
+
         for _ in range(self.MAX_RETRIES):
             self._send_packet(packet)
             print(f"Sent packet seq={packet.seq_num}, flags={packet.flags}")
@@ -237,11 +231,8 @@ class RUDPSocket:
 
         raise TimeoutError(f"Packet seq={packet.seq_num} was not acknowledged")
 
-    def send(self, data: bytes) -> None:
-        """
-        Send a full message reliably.
-        Large messages are split into chunks. The last chunk has the END flag.
-        """
+    def send(self, data: bytes) -> None:  # Send a full message reliably and large messages split into chunks.
+
         if isinstance(data, str):
             data = data.encode("utf-8")
         if not isinstance(data, bytes):
@@ -260,15 +251,12 @@ class RUDPSocket:
             self._send_one_reliable_packet(packet)
             self._next_seq()
 
-    def recv(self) -> bytes:
-        """
-        Receive a full message reliably.
-        Keeps receiving chunks until the END flag is seen.
-        """
+    def recv(self) -> bytes: # Keeps receiving chunks until the END flag is seen.
+
         message = bytearray()
 
         while True:
-            # 1. Check the buffer first!
+            # Check the buffer first
             if self.pending_received_packets:
                 buffered = self.pending_received_packets.popleft()
                 if isinstance(buffered, tuple):
@@ -284,7 +272,7 @@ class RUDPSocket:
                 except socket.timeout:
                     continue
 
-            # 2. Handle Teardown
+            # Handle Teardown
             if packet.has_flag(Packet.FIN):
                 if not already_acked:
                     ack = Packet(ack_num=packet.seq_num, flags=Packet.ACK)
@@ -292,11 +280,11 @@ class RUDPSocket:
                 self.closed = True
                 return b""
 
-            # 3. Ignore non-data packets in the receive loop
+            # Ignore non-data packets in the receive loop
             if not packet.has_flag(Packet.DATA):
                 continue
 
-            # 4. Handle Expected Data
+            # Handle Expected Data
             if packet.seq_num == self.expected_seq:
                 message.extend(packet.payload)
 
@@ -310,18 +298,15 @@ class RUDPSocket:
                 if packet.has_flag(Packet.END):
                     return bytes(message)
 
-            # 5. Handle Duplicate Data (Peer lost our previous ACK)
+            # Handle Duplicate Data (Peer lost our previous ACK)
             else:
                 if not already_acked:
                     duplicate_ack = Packet(ack_num=packet.seq_num, flags=Packet.ACK)
                     self._send_packet(duplicate_ack)
                     print(f"Duplicate seq={packet.seq_num}, ACK resent")
 
-    def close(self) -> None:
-        """
-        Reliable close: sends FIN, waits for ACK.
-        If peer's FIN is received instead, ACKs it and terminates immediately.
-        """
+    def close(self) -> None: # Reliable close: sends FIN, waits for ACK.
+
         if self.closed:
             return
 
@@ -340,12 +325,12 @@ class RUDPSocket:
                     print("FIN acknowledged. Closing cleanly.")
                     break
 
-                # The Pragmatic Fix: Simultaneous close detected
+                #  Simultaneous close detected
                 elif incoming_packet.has_flag(Packet.FIN):
                     print("Received peer's FIN. ACKing and terminating immediately.")
                     fin_ack = Packet(ack_num=incoming_packet.seq_num, flags=Packet.ACK)
                     self._send_packet(fin_ack)
-                    break # Exit the loop immediately, no more waiting
+                    break
 
                 elif incoming_packet.has_flag(Packet.DATA):
                     print(f"Received DATA during close. ACKing seq={incoming_packet.seq_num}")

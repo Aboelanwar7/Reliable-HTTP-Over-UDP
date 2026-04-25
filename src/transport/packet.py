@@ -5,25 +5,9 @@ from typing import ClassVar
 from src.transport.checksum import calculate_checksum
 
 
-# If this file is separated, use:
-# from .checksum import calculate_checksum
-
-
 @dataclass
 class Packet:
     """
-    Packet format:
-
-    0                   1                   2                   3
-    +-------------------+-------------------+-------------------+
-    | seq_num: 1 byte   | ack_num: 1 byte   | flags: 1 byte     |
-    +-------------------+-------------------+-------------------+
-    | checksum: 2 bytes | length: 2 bytes                       |
-    +-------------------+---------------------------------------+
-    | payload: variable length                                  |
-    +-----------------------------------------------------------+
-
-    ACK semantics in this implementation:
     - ack_num means: "I successfully received packet with sequence number ack_num".
     - Stop-and-wait only uses sequence numbers 0 and 1.
     """
@@ -36,7 +20,7 @@ class Packet:
 
     HEADER_FORMAT: ClassVar[str] = "!BBBxHH"
     HEADER_SIZE: ClassVar[int] = struct.calcsize(HEADER_FORMAT)
-    MAX_PAYLOAD_SIZE: ClassVar[int] = 900  # Safe under common MTU after UDP/IP headers
+    MAX_PAYLOAD_SIZE: ClassVar[int] = 900  # safe under common MTU after UDP/IP headers
 
     seq_num: int = 0
     ack_num: int = 0

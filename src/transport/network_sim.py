@@ -2,17 +2,14 @@ import random
 from collections import deque
 from typing import Optional
 
+"""
+Simulates unreliable network behavior:
+- packet loss
+- packet corruption
+- packet duplication
+"""
 
 class NetworkSimulator:
-    """
-    Simulates unreliable network behavior:
-    - packet loss
-    - packet corruption
-    - packet duplication
-
-    Reordering is not very meaningful in strict stop-and-wait because only one
-    data packet is in flight, but duplicate packets are useful for testing ACK loss.
-    """
 
     def __init__(
         self,

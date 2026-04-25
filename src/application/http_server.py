@@ -3,7 +3,7 @@ from src.application.http_parser import HTTPParser
 from src.transport.rudp_socket import RUDPSocket
 
 class HTTPServer:
-    def __init__(self, host, port, document_root="/home/youssef/Desktop/network-final-lab/Reliable-HTTP-Over-UDP/www"):
+    def __init__(self, host, port, document_root="../../www"):
         self.addr = (host, port)
         self.document_root = document_root
 
