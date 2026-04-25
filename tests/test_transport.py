@@ -4,9 +4,6 @@ import time
 from src.transport.rudp_socket import RUDPSocket
 
 
-# If test is separated, use:
-# from src.transport.rudp_socket import RUDPSocket
-
 
 def run_server():
     server_socket = RUDPSocket(loss_rate=0.2, corruption_rate=0.1, duplicate_rate=0.1)
