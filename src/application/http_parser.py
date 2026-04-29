@@ -32,16 +32,20 @@ class HTTPParser:
         if headers is None:
             headers = {}
 
-        response = f"HTTP/1.0 {status_code} {status_phrase}\r\n"
+        # If the body is a standard text string, encode to bytes
+        if isinstance(body, str):
+            body = body.encode('utf-8')
 
         if body:
             headers["Content-Length"] = str(len(body))
 
-        for key, value in headers.items():
-            response += f"{key}: {value}\r\n"
+        response_headers = f"HTTP/1.0 {status_code} {status_phrase}\r\n"
 
-        response += "\r\n" + body
-        return response.encode('utf-8')
+        for key, value in headers.items():
+            response_headers += f"{key}: {value}\r\n"
+
+        response_headers += "\r\n"
+        return response_headers.encode('utf-8') + body
 
     @staticmethod
     def parse(raw_data):
