@@ -168,17 +168,20 @@ class HTTPServer:
             file_path = os.path.join(self.document_root, safe_path)
 
             if os.path.exists(file_path) and os.path.isfile(file_path):
+                content_type = HTTPParser.get_mime_type(file_path)
+
                 with open(file_path, 'rb') as f:
                     content = f.read()
-                    return HTTPParser.build_response(200, "OK", body=content)
+                    headers = {"Content-Type": content_type}
+                    return HTTPParser.build_response(200, "OK", body=content, headers=headers)
             else:
                 error_body = "<html><body><h1>404 Not Found</h1></body></html>"
-                return HTTPParser.build_response(404, "NOT FOUND", body=error_body)
+                return HTTPParser.build_response(404, "NOT FOUND", body=error_body, headers={"Content-Type": "text/html"})
 
         elif req_msg.method == "POST":
             print(f"[Server] POST payload: {req_msg.body}")
             success_body = f"<html><body><h1>POST Data Received Successfully</h1><p>Your POST data was {req_msg.body}</p></body></html>"
-            return HTTPParser.build_response(200, "OK", body=success_body)
+            return HTTPParser.build_response(200, "OK", body=success_body, headers={"Content-Type": "text/html"})
 
         else:
-            return HTTPParser.build_response(400, "BAD REQUEST", body="Unknown Method")
+            return HTTPParser.build_response(400, "BAD REQUEST", body="Unknown Method", headers={"Content-Type": "text/html"})
