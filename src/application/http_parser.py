@@ -1,7 +1,10 @@
+import urllib.parse
+
 class HTTPMessage:
     def __init__(self,):
         self.method = None
         self.path = None
+        self.query_params = {}
         self.version = "HTTP/1.0"
         self.status_code = None
         self.status_phrase = None
@@ -9,6 +12,25 @@ class HTTPMessage:
         self.body = None
 
 class HTTPParser:
+    MIME_TYPES = {
+        ".html": "text/html",
+        ".css": "text/css",
+        ".js": "application/javascript",
+        ".json": "application/json",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".mp4": "video/mp4",
+        ".txt": "text/plain",
+    }
+
+    @staticmethod
+    def get_mime_type(file_path):
+        """Returns the correct Content-Type based on the file extension."""
+        import os
+        _, ext = os.path.splitext(file_path)
+        # Default to binary stream if extension is unknown
+        return HTTPParser.MIME_TYPES.get(ext.lower(), "application/octet-stream")
+
     @staticmethod
     def build_request(method, path, body="", headers=None):
         """Constructs a raw HTTP/1.0 request string."""
@@ -36,8 +58,12 @@ class HTTPParser:
         if isinstance(body, str):
             body = body.encode('utf-8')
 
-        if body:
+        if body and "Content-Length" not in headers:
             headers["Content-Length"] = str(len(body))
+
+        # Default to HTML if no content type is provided
+        if "Content-Type" not in headers:
+            headers["Content-Type"] = "text/html"
 
         response_headers = f"HTTP/1.0 {status_code} {status_phrase}\r\n"
 
@@ -74,9 +100,13 @@ class HTTPParser:
         else:
             # It's a Request
             msg.method = start_line[0]
-            msg.path = start_line[1]
+            raw_url = start_line[1]
             msg.version = start_line[2]
 
+        parsed_url = urllib.parse.urlparse(raw_url)
+        msg.path = parsed_url.path
+        msg.query_params = urllib.parse.parse_qs(parsed_url.query)
+        
         # Parse Headers
         for line in lines[1:]:
             if ": " in line:
