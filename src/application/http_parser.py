@@ -76,20 +76,23 @@ class HTTPParser:
     @staticmethod
     def parse(raw_data):
         """Parses a raw HTTP string into an HTTPMessage object."""
-        # Ensure we are working with a string
-        if isinstance(raw_data, bytes):
-            raw_data = raw_data.decode('utf-8', errors='ignore')
+        # Ensure we are working with a raw bytes, not strings
+        if isinstance(raw_data, str):
+            raw_data = raw_data.encode('utf-8')
 
         # HTTP headers and body are separated by a double CRLF
         parts = raw_data.split("\r\n\r\n", 1)
-        header_section = parts[0]
-        body = parts[1] if len(parts) > 1 else ""
+        header_section_bytes = parts[0]
+        body_bytes = parts[1] if len(parts) > 1 else b""
+
+        # Decode the headers only into a string for parsing
+        header_section = header_section_bytes.decode('utf-8', errors='ignore')
 
         lines = header_section.split("\r\n")
         start_line = lines[0].split(" ")
 
         msg = HTTPMessage()
-        msg.body = body
+        msg.body = body_bytes
 
         # Check if it's a Request or Response
         if start_line[0].startswith("HTTP"):
@@ -103,9 +106,10 @@ class HTTPParser:
             raw_url = start_line[1]
             msg.version = start_line[2]
 
-        parsed_url = urllib.parse.urlparse(raw_url)
-        msg.path = parsed_url.path
-        msg.query_params = urllib.parse.parse_qs(parsed_url.query)
+            # Parse URL specifically for requests
+            parsed_url = urllib.parse.urlparse(raw_url)
+            msg.path = parsed_url.path
+            msg.query_params = urllib.parse.parse_qs(parsed_url.query)
         
         # Parse Headers
         for line in lines[1:]:
@@ -114,3 +118,43 @@ class HTTPParser:
                 msg.headers[key] = value
 
         return msg
+
+    @staticmethod
+    def parse_multipart(body_bytes, content_type_header):
+        """
+        Slices a multipart/form-data body into individual files.
+        Returns a dictionary: {'filename.mp4: b'<raw_bytes>'}
+        """
+        import re
+
+        # Find boundary string in header
+        if "boundary=" not in content_type_header:
+            return {}
+
+        boundary_str = content_type_header.split("boundary=")[1]
+        boundary = b"--" + boundary_str.encode("utf-8")
+
+        parts = body_bytes.split(boundary)
+        extracted_files = {}
+
+        for part in parts:
+            if part in (b"", b"--\r\n", b"--", b"\r\n"):
+                continue
+
+            part = part.strip(b"\r\n")
+            if not part: continue
+
+            if b"\r\n\r\n" not in part:
+                continue
+
+            part_headers_bytes, part_content = part.split(b"\r\n\r\n", 1)
+            part_headers = part_headers_bytes.decode('utf-8', errors='ignore')
+
+            filename_match = re.search(f'filename="(.+?)"', part_headers)
+
+            if filename_match:
+                filename = filename_match.group(1)
+                extracted_files[filename] = part_content
+
+        return extracted_files
+
