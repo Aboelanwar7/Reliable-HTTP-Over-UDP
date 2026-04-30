@@ -179,9 +179,33 @@ class HTTPServer:
                 return HTTPParser.build_response(404, "NOT FOUND", body=error_body, headers={"Content-Type": "text/html"})
 
         elif req_msg.method == "POST":
-            print(f"[Server] POST payload: {req_msg.body}")
-            success_body = f"<html><body><h1>POST Data Received Successfully</h1><p>Your POST data was {req_msg.body}</p></body></html>"
-            return HTTPParser.build_response(200, "OK", body=success_body, headers={"Content-Type": "text/html"})
+            content_type = req_msg.headers.get("Content-Type", "")
+
+            if "multipart/form-data" in content_type:
+                # Extracting the files from the raw binary body
+                files = HTTPParser.parse_multipart(req_msg.body, content_type)
+
+                upload_dir = os.path.join(self.document_root, "uploads")
+                os.makedirs(upload_dir, exist_ok=True)
+
+                saved_files = []
+
+                for filename, file_bytes in files.items():
+                    safe_filename = os.path.basename(filename)
+                    save_path = os.path.join(upload_dir, safe_filename)
+
+                    with open(save_path, "wb") as f:
+                        f.write(file_bytes)
+
+                    saved_files.append(safe_filename)
+
+                success_body = f"<html><body><h2>Upload Successful!</h2><p>Saved: {', '.join(saved_files)}</body></html>"
+                return HTTPParser.build_response(200, "OK", body=success_body, headers={"Content-Type": "text/html"})
+
+            else:
+                print(f"[Server] POST payload: {req_msg.body}")
+                success_body = f"<html><body><h1>POST Data Received Successfully</h1><p>Your POST data was {req_msg.body}</p></body></html>"
+                return HTTPParser.build_response(200, "OK", body=success_body, headers={"Content-Type": "text/html"})
 
         else:
             return HTTPParser.build_response(400, "BAD REQUEST", body="Unknown Method", headers={"Content-Type": "text/html"})
